@@ -73,7 +73,7 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchScope, setSearchScope] = useState('all');
+  const [searchScope, setSearchScope] = useState('book');
   const [searchData, setSearchData] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [searchStatus, setSearchStatus] = useState('Սկսիր գրել՝ որոնելու համար։');

@@ -11,10 +11,10 @@ export function Header({ theme, onThemeChange, onMenu, onOpenSettings }) {
           <Icon name="menu" />
         </button>
 
-        <a className="brand" href="#" aria-label="Հայերեն Աստվածաշունչ">
+        <a className="brand" href="#" aria-label="Աստվածաշունչ">
           <span className="brand-mark"><Icon name="book" size={22} /></span>
           <span>
-            <strong>Հայերեն Աստվածաշունչ</strong>
+            <strong>Աստվածաշունչ</strong>
           </span>
         </a>
 

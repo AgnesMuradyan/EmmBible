@@ -1,4 +1,4 @@
-# Հայերեն Աստվածաշունչ — React reader
+# Աստվածաշունչ — React reader
 
 A Vite + React reader for the existing `Book1.html` … `Book66.html` files. The source book files are not converted: the app reads chapter numbers from `<strong>`, verse numbers from `<sup>`, and cross-references from `.xref[data-note]`.
 

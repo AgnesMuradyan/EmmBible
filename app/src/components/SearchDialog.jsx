@@ -42,7 +42,7 @@ export function SearchDialog({
             type="search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Գրել բառ, արտահայտություն կամ գրքի անուն..."
+            placeholder="..."
           />
           <button className="icon-button" type="button" onClick={onClose} aria-label="Փակել">
             <Icon name="close" />
@@ -76,7 +76,6 @@ export function SearchDialog({
             <div className="search-hint">
               <span className="search-hint-icon"><Icon name="quote" size={27} /></span>
               <h3>Գտիր ցանկացած հատված</h3>
-              <p>Որոնումը աշխատում է բոլոր 66 գրքերում և հիշում է պատրաստված ինդեքսը հաջորդ այցելության համար։</p>
             </div>
           ) : results.length === 0 ? (
             <div className="empty-state">
