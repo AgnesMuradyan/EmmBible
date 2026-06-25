@@ -1,0 +1,452 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BOOKS, DEFAULT_BOOK_NUMBER } from './data/books.js';
+import { fetchBook } from './lib/bibleParser.js';
+import {
+  buildSearchIndex,
+  clearCachedIndex,
+  getCachedIndex,
+  searchIndex as runSearch,
+} from './lib/searchIndex.js';
+import { useLocalStorage } from './hooks/useLocalStorage.js';
+import { Header } from './components/Header.jsx';
+import { Sidebar } from './components/Sidebar.jsx';
+import { ReaderToolbar } from './components/ReaderToolbar.jsx';
+import { Reader } from './components/Reader.jsx';
+import { SearchDialog } from './components/SearchDialog.jsx';
+import { Drawer } from './components/Drawer.jsx';
+import { SettingsPanel } from './components/SettingsPanel.jsx';
+import { Icon } from './components/Icon.jsx';
+
+function readInitialLocation() {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const hashBook = Number(hash.get('book'));
+  const hashChapter = hash.get('chapter');
+  const hashVerse = hash.get('verse');
+
+  if (hashBook >= 1 && hashBook <= 66) {
+    return {
+      book: hashBook,
+      chapter: hashChapter || '1',
+      verse: hashVerse || null,
+    };
+  }
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('bible:last-location'));
+    if (stored?.book >= 1 && stored?.book <= 66) {
+      return { book: stored.book, chapter: String(stored.chapter || 1), verse: null };
+    }
+  } catch {
+    // Use the included sample book.
+  }
+
+  return { book: DEFAULT_BOOK_NUMBER, chapter: '1', verse: null };
+}
+
+function updateHash(book, chapter, verse = null) {
+  const params = new URLSearchParams({ book: String(book), chapter: String(chapter) });
+  if (verse) params.set('verse', String(verse));
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${params}`);
+}
+
+export default function App() {
+  const initialLocation = useRef(readInitialLocation()).current;
+  const [bookNumber, setBookNumber] = useState(initialLocation.book);
+  const [chapterNumber, setChapterNumber] = useState(initialLocation.chapter);
+  const [pendingVerse, setPendingVerse] = useState(initialLocation.verse);
+  const [bookData, setBookData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [theme, setTheme] = useLocalStorage('bible:theme', 'sepia');
+  const [fontSize, setFontSize] = useLocalStorage('bible:font-size', 22);
+  const [lineHeight, setLineHeight] = useLocalStorage('bible:line-height', 1.95);
+  const [, setLastLocation] = useLocalStorage('bible:last-location', initialLocation);
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [referencesOpen, setReferencesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedReference, setSelectedReference] = useState(null);
+  const [pendingReferenceJump, setPendingReferenceJump] = useState(null);
+  const [toast, setToast] = useState('');
+  const [readingProgress, setReadingProgress] = useState(0);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchScope, setSearchScope] = useState('all');
+  const [searchData, setSearchData] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchStatus, setSearchStatus] = useState('Սկսիր գրել՝ որոնելու համար։');
+  const [indexProgress, setIndexProgress] = useState(null);
+  const indexPromiseRef = useRef(null);
+  const indexAbortRef = useRef(null);
+
+  const currentChapter = useMemo(
+    () => bookData?.chapters.find((chapter) => String(chapter.number) === String(chapterNumber)) || null,
+    [bookData, chapterNumber],
+  );
+
+  const currentChapterIndex = useMemo(
+    () => bookData?.chapters.findIndex((chapter) => String(chapter.number) === String(chapterNumber)) ?? -1,
+    [bookData, chapterNumber],
+  );
+
+  const showToast = useCallback((message) => {
+    setToast(message);
+    window.clearTimeout(showToast.timeoutId);
+    showToast.timeoutId = window.setTimeout(() => setToast(''), 2200);
+  }, []);
+
+  const navigate = useCallback((nextBook, nextChapter = 1, verse = null) => {
+    setBookNumber(Number(nextBook));
+    setChapterNumber(String(nextChapter));
+    setPendingVerse(verse ? String(verse) : null);
+    setSelectedReference(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      'content',
+      theme === 'dark' ? '#171819' : theme === 'light' ? '#f4f5f6' : '#f4ede2',
+    );
+  }, [theme]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError('');
+    setBookData(null);
+
+    fetchBook(bookNumber, BOOKS[bookNumber - 1]?.name || `Book ${bookNumber}`, controller.signal)
+      .then((parsed) => {
+        setBookData(parsed);
+        const requestedExists = parsed.chapters.some(
+          (chapter) => String(chapter.number) === String(chapterNumber),
+        );
+        if (!requestedExists && parsed.chapters[0]) {
+          setChapterNumber(String(parsed.chapters[0].number));
+        }
+      })
+      .catch((loadError) => {
+        if (loadError.name !== 'AbortError') {
+          setError(`Book${bookNumber}.html ֆայլը չգտնվեց կամ հնարավոր չեղավ կարդալ։`);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [bookNumber]);
+
+  useEffect(() => {
+    if (!bookData || !currentChapter) return;
+    updateHash(bookNumber, chapterNumber, pendingVerse);
+    setLastLocation({ book: bookNumber, chapter: chapterNumber });
+  }, [bookData, currentChapter, bookNumber, chapterNumber, pendingVerse, setLastLocation]);
+
+  useEffect(() => {
+    if (!pendingVerse || !currentChapter) return undefined;
+    const timeout = window.setTimeout(() => {
+      const verse = document.getElementById(`verse-${pendingVerse}`);
+      if (verse) {
+        verse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        verse.classList.add('verse-jump-highlight');
+        window.setTimeout(() => verse.classList.remove('verse-jump-highlight'), 3600);
+      }
+    }, 180);
+    return () => window.clearTimeout(timeout);
+  }, [pendingVerse, currentChapter]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
+      setReadingProgress(documentHeight > 0 ? Math.min(100, (window.scrollY / documentHeight) * 100) : 0);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [currentChapter]);
+
+  const ensureSearchIndex = useCallback(async (force = false) => {
+    if (searchData && !force) return searchData;
+    if (indexPromiseRef.current && !force) return indexPromiseRef.current;
+
+    if (force) {
+      indexAbortRef.current?.abort();
+      indexPromiseRef.current = null;
+      setSearchData(null);
+      await clearCachedIndex();
+    }
+
+    const controller = new AbortController();
+    indexAbortRef.current = controller;
+
+    const promise = (async () => {
+      if (!force) {
+        const cached = await getCachedIndex();
+        if (cached?.length) {
+          setSearchData(cached);
+          return cached;
+        }
+      }
+
+      setSearchStatus('Պատրաստվում է ամբողջ Աստվածաշնչի որոնումը...');
+      setIndexProgress({ completed: 0, total: 66, bookName: '' });
+      const built = await buildSearchIndex({
+        signal: controller.signal,
+        onProgress: setIndexProgress,
+      });
+      setSearchData(built);
+      setIndexProgress(null);
+      return built;
+    })();
+
+    indexPromiseRef.current = promise;
+    try {
+      return await promise;
+    } finally {
+      if (indexPromiseRef.current === promise) indexPromiseRef.current = null;
+    }
+  }, [searchData]);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    ensureSearchIndex().catch((indexError) => {
+      if (indexError.name !== 'AbortError') setSearchStatus('Չհաջողվեց պատրաստել որոնումը։');
+    });
+  }, [ensureSearchIndex]);
+
+  const changeSearchScope = useCallback((scope) => {
+    setSearchScope(scope);
+    ensureSearchIndex().catch((indexError) => {
+      if (indexError.name !== 'AbortError') setSearchStatus('Չհաջողվեց պատրաստել որոնումը։');
+    });
+  }, [ensureSearchIndex]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      if (!searchData) {
+        setSearchStatus('Որոնման ինդեքսը դեռ պատրաստվում է...');
+        return;
+      }
+
+      const { total, items } = runSearch(
+        searchData,
+        searchQuery,
+        searchScope === 'book' ? bookNumber : null,
+      );
+      setSearchResults(items);
+      setSearchStatus(total ? `Գտնվեց ${total} արդյունք` : 'Արդյունք չգտնվեց։');
+    }, 160);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery, searchScope, searchData, bookNumber]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const target = event.target;
+      const isTyping = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || target?.isContentEditable;
+
+      if (event.key === '/' && !isTyping) {
+        event.preventDefault();
+        openSearch();
+      }
+      if (event.key === 'Escape') {
+        setSearchOpen(false);
+        setSidebarOpen(false);
+        setReferencesOpen(false);
+        setSettingsOpen(false);
+      }
+      if (!isTyping && event.altKey && event.key === 'ArrowLeft' && currentChapterIndex > 0) {
+        navigate(bookNumber, bookData.chapters[currentChapterIndex - 1].number);
+      }
+      if (!isTyping && event.altKey && event.key === 'ArrowRight' && currentChapterIndex < (bookData?.chapters.length || 0) - 1) {
+        navigate(bookNumber, bookData.chapters[currentChapterIndex + 1].number);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [openSearch, currentChapterIndex, navigate, bookNumber, bookData]);
+
+  const copyVerse = async (verse) => {
+    const text = `${bookData.name} ${currentChapter.number}:${verse.number}\n${verse.text}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Համարը պատճենվեց');
+    } catch {
+      showToast('Չհաջողվեց պատճենել');
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingReferenceJump || referencesOpen) return undefined;
+    const timeout = window.setTimeout(() => {
+      const reference = pendingReferenceJump;
+      const refs = [...document.querySelectorAll('.xref')];
+      const target = refs.find((ref) => {
+        const sameReference = ref.dataset.refId === reference.id;
+        const sameVerse = ref.closest('.verse-row')?.dataset.verse === String(reference.verse);
+        return sameReference && sameVerse;
+      }) || refs.find((ref) => ref.dataset.refId === reference.id)
+        || refs.find((ref) => (
+          ref.closest('.verse-row')?.dataset.verse === String(reference.verse)
+          && ref.textContent.trim() === reference.mark
+        ));
+      if (!target) {
+        setPendingReferenceJump(null);
+        return;
+      }
+      const verseRow = target.closest('.verse-row');
+      (verseRow || target).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('xref-flash');
+      window.setTimeout(() => {
+        target.classList.remove('xref-flash');
+        setPendingReferenceJump(null);
+      }, 2200);
+    }, 80);
+    return () => window.clearTimeout(timeout);
+  }, [pendingReferenceJump, referencesOpen]);
+
+  const goToReference = (reference) => {
+    setPendingReferenceJump(reference);
+    setReferencesOpen(false);
+  };
+
+  const previousChapter = () => {
+    if (currentChapterIndex > 0) {
+      navigate(bookNumber, bookData.chapters[currentChapterIndex - 1].number);
+    }
+  };
+
+  const nextChapter = () => {
+    if (currentChapterIndex < bookData.chapters.length - 1) {
+      navigate(bookNumber, bookData.chapters[currentChapterIndex + 1].number);
+    }
+  };
+
+  const references = currentChapter?.references || [];
+
+  return (
+    <div className="app-shell">
+      <div className="reading-progress" aria-hidden="true"><span style={{ width: `${readingProgress}%` }} /></div>
+      <Header
+        theme={theme}
+        onThemeChange={setTheme}
+        onMenu={() => setSidebarOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        bookNumber={bookNumber}
+        chapterNumber={chapterNumber}
+        chapters={bookData?.chapters || []}
+        onNavigate={navigate}
+      />
+
+      <main className="main-content">
+        <ReaderToolbar
+          onSearch={openSearch}
+        />
+
+        <Reader
+          bookName={bookData?.name || BOOKS[bookNumber - 1]?.name || ''}
+          chapter={currentChapter}
+          loading={loading}
+          error={error}
+          fontSize={fontSize}
+          lineHeight={lineHeight}
+          onCopy={copyVerse}
+          onReference={(reference) => {
+            setSelectedReference(reference);
+            setReferencesOpen(true);
+          }}
+          onPrevious={previousChapter}
+          onNext={nextChapter}
+          hasPrevious={currentChapterIndex > 0}
+          hasNext={currentChapterIndex >= 0 && currentChapterIndex < (bookData?.chapters.length || 0) - 1}
+        />
+      </main>
+
+      <SearchDialog
+        open={searchOpen}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        scope={searchScope}
+        onScopeChange={changeSearchScope}
+        status={searchStatus}
+        progress={indexProgress}
+        results={searchResults}
+        onSelect={(result) => {
+          setSearchOpen(false);
+          navigate(result.bookNumber, result.chapter, result.verse);
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
+
+      <Drawer open={referencesOpen} title={`Հղումներ · Գլուխ ${chapterNumber}`} onClose={() => setReferencesOpen(false)}>
+        {selectedReference && (
+          <div className="selected-reference">
+            <span>{selectedReference.mark}</span>
+            <div>
+              <small>Համար {selectedReference.verse}</small>
+              <p>{selectedReference.note}</p>
+            </div>
+          </div>
+        )}
+        {references.length === 0 ? (
+          <div className="empty-state"><Icon name="list" size={32} /><p>Այս գլխում հղումներ չկան։</p></div>
+        ) : (
+          <div className="reference-list">
+            {references.map((reference, index) => (
+              <button
+                key={`${reference.id}-${index}`}
+                type="button"
+                data-ref-id={reference.id}
+                data-verse={reference.verse}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  goToReference(reference);
+                }}
+                onClick={() => goToReference(reference)}
+              >
+                <span>{reference.mark}</span>
+                <div><small>Համար {reference.verse}</small><p>{reference.note}</p></div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer open={settingsOpen} title="Ընթերցման տեսք" onClose={() => setSettingsOpen(false)}>
+        <SettingsPanel
+          theme={theme}
+          onThemeChange={setTheme}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
+          lineHeight={lineHeight}
+          onLineHeightChange={setLineHeight}
+        />
+      </Drawer>
+
+      {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
+  );
+}
