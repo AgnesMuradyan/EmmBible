@@ -17,6 +17,18 @@ export function Reader({
 }) {
   const [hoverReference, setHoverReference] = useState(null);
 
+  const showReferenceTip = (ref) => {
+    const rect = ref.getBoundingClientRect();
+    const isCompact = window.matchMedia('(max-width: 720px), (hover: none), (pointer: coarse)').matches;
+    setHoverReference({
+      mark: ref.textContent.trim(),
+      note: ref.dataset.note || '',
+      left: isCompact ? window.innerWidth / 2 : Math.min(Math.max(rect.left + rect.width / 2, 160), window.innerWidth - 160),
+      top: rect.top > 110 ? rect.top - 12 : rect.bottom + 12,
+      placement: rect.top > 110 ? 'top' : 'bottom',
+    });
+  };
+
   useEffect(() => {
     if (!hoverReference) return undefined;
     const clearReference = () => setHoverReference(null);
@@ -27,14 +39,7 @@ export function Reader({
   const handleMouseOver = (event) => {
     const ref = event.target.closest('.xref');
     if (!ref || !event.currentTarget.contains(ref)) return;
-    const rect = ref.getBoundingClientRect();
-    setHoverReference({
-      mark: ref.textContent.trim(),
-      note: ref.dataset.note || '',
-      left: Math.min(Math.max(rect.left + rect.width / 2, 160), window.innerWidth - 160),
-      top: rect.top > 110 ? rect.top - 12 : rect.bottom + 12,
-      placement: rect.top > 110 ? 'top' : 'bottom',
-    });
+    showReferenceTip(ref);
   };
 
   const handleMouseOut = (event) => {
@@ -48,6 +53,11 @@ export function Reader({
     const ref = event.target.closest('.xref');
     if (!ref || !event.currentTarget.contains(ref)) return;
     event.preventDefault();
+    const shouldShowInline = window.matchMedia('(max-width: 720px), (hover: none), (pointer: coarse)').matches;
+    if (shouldShowInline) {
+      showReferenceTip(ref);
+      return;
+    }
     const verseRow = ref.closest('.verse-row');
     onReference({
       id: ref.dataset.refId || '',

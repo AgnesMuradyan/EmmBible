@@ -19,7 +19,7 @@ export const BOOKS = [
   testament: index < 39 ? 'Հին Կտակարան' : 'Նոր Կտակարան',
 }));
 
-export const DEFAULT_BOOK_NUMBER = 30;
+export const DEFAULT_BOOK_NUMBER = 1;
 export const BOOK_PATHS = (bookNumber) => [
   `/books/Book${bookNumber}.html`,
   `/Book${bookNumber}.html`,

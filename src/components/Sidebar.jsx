@@ -56,7 +56,6 @@ export function Sidebar({
       />
       <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Աստվածաշնչի նավիգացիա">
         <div className="sidebar-mobile-head">
-          <strong>Նավիգացիա</strong>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Փակել">
             <Icon name="close" />
           </button>

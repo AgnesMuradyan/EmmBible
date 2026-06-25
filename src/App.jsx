@@ -31,15 +31,6 @@ function readInitialLocation() {
     };
   }
 
-  try {
-    const stored = JSON.parse(window.localStorage.getItem('bible:last-location'));
-    if (stored?.book >= 1 && stored?.book <= 66) {
-      return { book: stored.book, chapter: String(stored.chapter || 1), verse: null };
-    }
-  } catch {
-    // Use the included sample book.
-  }
-
   return { book: DEFAULT_BOOK_NUMBER, chapter: '1', verse: null };
 }
 
@@ -58,7 +49,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [theme, setTheme] = useLocalStorage('bible:theme', 'sepia');
+  const [theme, setTheme] = useLocalStorage('bible:theme', 'dark');
   const [fontSize, setFontSize] = useLocalStorage('bible:font-size', 22);
   const [lineHeight, setLineHeight] = useLocalStorage('bible:line-height', 1.95);
   const [, setLastLocation] = useLocalStorage('bible:last-location', initialLocation);
