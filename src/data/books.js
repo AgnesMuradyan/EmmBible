@@ -20,7 +20,12 @@ export const BOOKS = [
 }));
 
 export const DEFAULT_BOOK_NUMBER = 1;
+
+const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
+
 export const BOOK_PATHS = (bookNumber) => [
+  `${APP_BASE_PATH}books/Book${bookNumber}.html`,
   `/books/Book${bookNumber}.html`,
+  `${APP_BASE_PATH}Book${bookNumber}.html`,
   `/Book${bookNumber}.html`,
 ];
