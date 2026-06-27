@@ -6,7 +6,7 @@ const COPY_BOOK_NAMES = {
 };
 
 function cleanCopiedText(fragment) {
-  fragment.querySelectorAll('.xref, .verse-actions, .verse-number, button').forEach((node) => node.remove());
+  fragment.querySelectorAll('.xref, .verse-actions').forEach((node) => node.remove());
   return fragment.textContent.replace(/\s+/g, ' ').trim();
 }
 
