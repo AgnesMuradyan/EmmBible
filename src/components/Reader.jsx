@@ -197,7 +197,12 @@ export function Reader({
       {hoverReference?.note && (
         <div
           className={`xref-tooltip ${hoverReference.placement}`}
-          style={{ left: hoverReference.left, top: hoverReference.top }}
+          style={{
+            '--reader-font-size': `${fontSize}px`,
+            '--reader-line-height': lineHeight,
+            left: hoverReference.left,
+            top: hoverReference.top,
+          }}
           role="tooltip"
         >
           <strong>{hoverReference.mark}</strong>
