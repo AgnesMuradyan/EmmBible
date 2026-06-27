@@ -416,9 +416,9 @@ code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   color: var(--text);
   background: var(--surface-strong);
   box-shadow: var(--shadow-soft);
-  font-family: Inter, Arian AMU, Arial, sans-serif;
-  font-size: 12px;
-  line-height: 1.5;
+  font-family: 'Noto Serif Armenian', Sylfaen, 'DejaVu Serif', Georgia, serif;
+  font-size: calc(var(--reader-font-size) * .72);
+  line-height: calc(var(--reader-line-height) * .82);
   pointer-events: none;
   transform: translate(-50%, -100%);
 }
@@ -652,7 +652,6 @@ code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .xref-tooltip {
     width: calc(100vw - 24px);
     max-width: 340px;
-    font-size: 12px;
   }
 }
 
