@@ -1,6 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Icon } from './Icon.jsx';
 
+const COPY_BOOK_NAMES = {
+  'Ելք': 'Ելից',
+};
+
+function cleanCopiedText(fragment) {
+  fragment.querySelectorAll('.xref, .verse-actions, .verse-number, button').forEach((node) => node.remove());
+  return fragment.textContent.replace(/\s+/g, ' ').trim();
+}
+
+function formatCopyTitle(bookName, chapterNumber, selectedRows) {
+  const copyBookName = COPY_BOOK_NAMES[bookName] || bookName;
+  const firstVerse = selectedRows[0]?.dataset.verse;
+  const lastVerse = selectedRows[selectedRows.length - 1]?.dataset.verse;
+
+  if (!firstVerse) return `Գիրք ${copyBookName} ${chapterNumber}`;
+  const verseRange = firstVerse === lastVerse ? firstVerse : `${firstVerse}-${lastVerse}`;
+  return `Գիրք ${copyBookName} ${chapterNumber}:${verseRange}`;
+}
+
 export function Reader({
   bookName,
   chapter,
@@ -67,6 +86,25 @@ export function Reader({
     });
   };
 
+  const handleSelectionCopy = (event) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (!event.currentTarget.contains(range.commonAncestorContainer)) return;
+
+    const selectedRows = [...event.currentTarget.querySelectorAll('.verse-row')]
+      .filter((row) => range.intersectsNode(row));
+    if (selectedRows.length === 0) return;
+
+    const selectedText = cleanCopiedText(range.cloneContents());
+    if (!selectedText) return;
+
+    const title = formatCopyTitle(bookName, chapter.number, selectedRows);
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', `${title}\n${selectedText}`);
+  };
+
   if (loading) {
     return (
       <article className="reader-card loading-card" aria-live="polite">
@@ -103,6 +141,7 @@ export function Reader({
         onMouseOut={handleMouseOut}
         onMouseLeave={() => setHoverReference(null)}
         onClick={handleClick}
+        onCopy={handleSelectionCopy}
       >
         {chapter.preludeHtml && (
           <div className="chapter-prelude" dangerouslySetInnerHTML={{ __html: chapter.preludeHtml }} />
