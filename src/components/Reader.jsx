@@ -17,7 +17,7 @@ function formatCopyTitle(bookName, chapterNumber, selectedRows) {
 
   if (!firstVerse) return `Գիրք ${copyBookName} ${chapterNumber}`;
   const verseRange = firstVerse === lastVerse ? firstVerse : `${firstVerse}-${lastVerse}`;
-  return `Գիրք ${copyBookName} ${chapterNumber}:${verseRange}`;
+  return `${copyBookName} ${chapterNumber}:${verseRange}`;
 }
 
 export function Reader({
