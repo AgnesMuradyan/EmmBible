@@ -396,6 +396,7 @@ export default function App() {
       <div className="reading-progress" aria-hidden="true"><span style={{ width: `${readingProgress}%` }} /></div>
       <Header
         theme={theme}
+        chapterKey={`${bookNumber}-${chapterNumber}`}
         onThemeChange={setTheme}
         onMenu={() => setSidebarOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
