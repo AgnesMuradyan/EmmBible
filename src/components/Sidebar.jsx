@@ -22,10 +22,13 @@ export function Sidebar({
   const oldTestament = filteredBooks.filter((book) => book.number <= 39);
   const newTestament = filteredBooks.filter((book) => book.number >= 40);
 
-  const renderBookGroup = (title, books) => (
+  const renderBookGroup = (title, books, testament) => (
     books.length > 0 && (
-      <section className="book-group" key={title}>
-        <h3>{title}</h3>
+      <section className={`book-group ${testament}-testament`} key={title}>
+        <div className="testament-heading">
+          <span className="testament-mark" aria-hidden="true" />
+          <h3>{title}</h3>
+        </div>
         <div className="book-list">
           {books.map((book) => (
             <button
@@ -82,8 +85,8 @@ export function Sidebar({
                   type="search"
                 />
               </label>
-              {renderBookGroup('Հին Կտակարան', oldTestament)}
-              {renderBookGroup('Նոր Կտակարան', newTestament)}
+              {renderBookGroup('Հին Կտակարան', oldTestament, 'old')}
+              {renderBookGroup('Նոր Կտակարան', newTestament, 'new')}
             </>
           )}
 

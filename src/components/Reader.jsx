@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon.jsx';
 
 const COPY_BOOK_NAMES = {
@@ -28,13 +28,32 @@ export function Reader({
   fontSize,
   lineHeight,
   onCopy,
+  onShare,
   onReference,
   onPrevious,
   onNext,
+  previousChapterNumber,
+  nextChapterNumber,
   hasPrevious,
   hasNext,
 }) {
   const [hoverReference, setHoverReference] = useState(null);
+  const [atChapterEnd, setAtChapterEnd] = useState(false);
+  const chapterEndRef = useRef(null);
+  const swipeRef = useRef(null);
+
+  useEffect(() => {
+    setAtChapterEnd(false);
+    const marker = chapterEndRef.current;
+    if (!marker) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setAtChapterEnd(entry.isIntersecting),
+      { rootMargin: '0px 0px 100px', threshold: 0 },
+    );
+    observer.observe(marker);
+    return () => observer.disconnect();
+  }, [bookName, chapter?.number]);
 
   const showReferenceTip = (ref) => {
     const rect = ref.getBoundingClientRect();
@@ -105,6 +124,34 @@ export function Reader({
     event.clipboardData.setData('text/plain', `${title}\n${selectedText}`);
   };
 
+  const handleTouchStart = (event) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    swipeRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+      blocked: Boolean(event.target.closest('button, a, input, .xref')),
+    };
+  };
+
+  const handleTouchEnd = (event) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start || start.blocked || event.changedTouches.length !== 1) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const isDeliberateSwipe = Date.now() - start.time < 800
+      && Math.abs(deltaX) >= 70
+      && Math.abs(deltaX) > Math.abs(deltaY) * 1.4;
+    if (!isDeliberateSwipe) return;
+
+    if (deltaX < 0 && hasNext) onNext();
+    if (deltaX > 0 && hasPrevious) onPrevious();
+  };
+
   if (loading) {
     return (
       <article className="reader-card loading-card" aria-live="polite">
@@ -128,7 +175,7 @@ export function Reader({
   if (!chapter) return null;
 
   return (
-    <article className="reader-card">
+    <article className="reader-card" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <header className="chapter-header">
         <h1>{bookName}</h1>
         <p>Գլուխ {chapter.number}</p>
@@ -173,23 +220,35 @@ export function Reader({
                 >
                   <Icon name="copy" size={17} />
                 </button>
+                <button
+                  type="button"
+                  title="Կիսվել համարով"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onShare(verse);
+                  }}
+                >
+                  <Icon name="share" size={17} />
+                </button>
               </div>
             </section>
           );
         })}
       </div>
 
-      <footer className="chapter-navigation">
-        <button type="button" onClick={onPrevious} disabled={!hasPrevious}>
+      <div className="chapter-end-marker" ref={chapterEndRef} aria-hidden="true" />
+
+      <footer className={`chapter-navigation${atChapterEnd ? ' show-labels' : ''}`}>
+        <button type="button" onClick={onPrevious} disabled={!hasPrevious} title="Նախորդ գլուխ">
           <Icon name="chevronLeft" />
-          <span>Նախորդ գլուխ</span>
+          <span>Նախորդ՝ Գլուխ {previousChapterNumber}</span>
         </button>
         <div>
           <strong>{bookName}</strong>
           <span>Գլուխ {chapter.number}</span>
         </div>
-        <button type="button" onClick={onNext} disabled={!hasNext}>
-          <span>Հաջորդ գլուխ</span>
+        <button type="button" onClick={onNext} disabled={!hasNext} title="Հաջորդ գլուխ">
+          <span>Հաջորդ՝ Գլուխ {nextChapterNumber}</span>
           <Icon name="chevronRight" />
         </button>
       </footer>
