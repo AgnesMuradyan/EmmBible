@@ -62,6 +62,7 @@ export default function App() {
   const [pendingReferenceJump, setPendingReferenceJump] = useState(null);
   const [toast, setToast] = useState('');
   const [readingProgress, setReadingProgress] = useState(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchScope, setSearchScope] = useState('book');
@@ -94,6 +95,19 @@ export default function App() {
     setPendingVerse(verse ? String(verse) : null);
     setSelectedReference(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    const handleHashNavigation = () => {
+      const location = readInitialLocation();
+      setBookNumber(location.book);
+      setChapterNumber(String(location.chapter));
+      setPendingVerse(location.verse ? String(location.verse) : null);
+      setSelectedReference(null);
+    };
+
+    window.addEventListener('hashchange', handleHashNavigation);
+    return () => window.removeEventListener('hashchange', handleHashNavigation);
   }, []);
 
   useEffect(() => {
@@ -140,21 +154,43 @@ export default function App() {
 
   useEffect(() => {
     if (!pendingVerse || !currentChapter) return undefined;
-    const timeout = window.setTimeout(() => {
+    let cancelled = false;
+    const timeouts = [];
+
+    const alignVerse = (behavior = 'auto') => {
+      if (cancelled) return;
       const verse = document.getElementById(`verse-${pendingVerse}`);
       if (verse) {
-        verse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        verse.scrollIntoView({ behavior, block: 'center' });
         verse.classList.add('verse-jump-highlight');
-        window.setTimeout(() => verse.classList.remove('verse-jump-highlight'), 3600);
       }
-    }, 180);
-    return () => window.clearTimeout(timeout);
+    };
+
+    const beginJump = async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+      if (cancelled) return;
+
+      alignVerse(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+      timeouts.push(window.setTimeout(() => alignVerse('auto'), 350));
+      timeouts.push(window.setTimeout(() => alignVerse('auto'), 900));
+      timeouts.push(window.setTimeout(() => {
+        document.getElementById(`verse-${pendingVerse}`)?.classList.remove('verse-jump-highlight');
+      }, 3600));
+    };
+
+    const startTimeout = window.setTimeout(beginJump, 80);
+    timeouts.push(startTimeout);
+    return () => {
+      cancelled = true;
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
   }, [pendingVerse, currentChapter]);
 
   useEffect(() => {
     const handleScroll = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
       setReadingProgress(documentHeight > 0 ? Math.min(100, (window.scrollY / documentHeight) * 100) : 0);
+      setShowScrollTop(window.scrollY > 700);
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -285,6 +321,28 @@ export default function App() {
     }
   };
 
+  const shareVerse = async (verse) => {
+    const title = `${bookData.name} ${currentChapter.number}:${verse.number}`;
+    updateHash(bookNumber, currentChapter.number, verse.number);
+    const url = window.location.href;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ url });
+        return;
+      } catch (shareError) {
+        if (shareError.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Համարի հղումը պատճենվեց');
+    } catch {
+      showToast('Չհաջողվեց պատճենել հղումը');
+    }
+  };
+
   useEffect(() => {
     if (!pendingReferenceJump || referencesOpen) return undefined;
     const timeout = window.setTimeout(() => {
@@ -365,16 +423,41 @@ export default function App() {
           fontSize={fontSize}
           lineHeight={lineHeight}
           onCopy={copyVerse}
+          onShare={shareVerse}
           onReference={(reference) => {
             setSelectedReference(reference);
             setReferencesOpen(true);
           }}
           onPrevious={previousChapter}
           onNext={nextChapter}
+          previousChapterNumber={currentChapterIndex > 0 ? bookData.chapters[currentChapterIndex - 1].number : null}
+          nextChapterNumber={currentChapterIndex >= 0 && currentChapterIndex < (bookData?.chapters.length || 0) - 1
+            ? bookData.chapters[currentChapterIndex + 1].number
+            : null}
           hasPrevious={currentChapterIndex > 0}
           hasNext={currentChapterIndex >= 0 && currentChapterIndex < (bookData?.chapters.length || 0) - 1}
         />
       </main>
+
+      <footer className="site-footer">
+        <span aria-hidden="true">©</span>
+        <span>Emmanuel Armenia</span>
+      </footer>
+
+      <button
+        className={`scroll-to-top${showScrollTop ? ' visible' : ''}`}
+        type="button"
+        title="Վերադառնալ վերև"
+        aria-label="Վերադառնալ էջի վերև"
+        aria-hidden={!showScrollTop}
+        tabIndex={showScrollTop ? 0 : -1}
+        onClick={() => window.scrollTo({
+          top: 0,
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        })}
+      >
+        <Icon name="arrowUp" size={19} />
+      </button>
 
       <SearchDialog
         open={searchOpen}

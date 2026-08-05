@@ -6,9 +6,13 @@ export function ReaderToolbar({
   return (
     <div className="reader-toolbar">
       <div className="toolbar-actions">
-        <button type="button" onClick={onSearch} title="Որոնել">
-          <Icon name="search" />
-          <span>Որոնել</span>
+        <button className="main-search-trigger" type="button" onClick={onSearch} title="Որոնել Աստվածաշնչում">
+          <span className="main-search-icon"><Icon name="search" /></span>
+          <span className="main-search-copy">
+            <strong>Որոնել</strong>
+            <small></small>
+          </span>
+          <kbd>/</kbd>
         </button>
       </div>
     </div>
