@@ -442,7 +442,7 @@ export default function App() {
 
       <footer className="site-footer">
         <span aria-hidden="true">©</span>
-        <span>Emmanuel Armenia</span>
+        <span>2026 Life Publishers International</span>
       </footer>
 
       <button
